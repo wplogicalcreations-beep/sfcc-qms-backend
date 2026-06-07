@@ -6,9 +6,7 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { initDb } = require('./db/schema');
 const { validateEnv } = require('./config');
-
-validateEnv();
-initDb();
+const { seed } = require('./db/seed');
 
 const app = express();
 
@@ -55,10 +53,21 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error', message: err.message });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`\n🚀 SFCC QMS API running on port ${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/api/health\n`);
+async function start() {
+  validateEnv();
+  initDb();
+  await seed();
+
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`\n🚀 SFCC QMS API running on port ${PORT}`);
+    console.log(`   Health: http://localhost:${PORT}/api/health\n`);
+  });
+}
+
+start().catch((error) => {
+  console.error(error);
+  process.exit(1);
 });
 
 module.exports = app;

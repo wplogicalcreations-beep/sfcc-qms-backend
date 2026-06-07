@@ -167,4 +167,8 @@ async function seed() {
   console.log('');
 }
 
-seed().catch(console.error);
+if (require.main === module) {
+  seed().catch(console.error);
+}
+
+module.exports = { seed };
