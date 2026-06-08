@@ -14,7 +14,7 @@ function parseAllowedOrigins() {
   const values = [process.env.FRONTEND_URLS, process.env.FRONTEND_URL]
     .filter(Boolean)
     .flatMap((value) => String(value).split(','))
-    .map((value) => value.trim())
+    .map((value) => value.trim().replace(/\/$/, ''))
     .filter(Boolean);
 
   return [...new Set(values)];
