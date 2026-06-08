@@ -141,6 +141,48 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// POST /api/auth/bootstrap-user
+// Free-plan provisioning path for Render when you need to create test users without an existing admin session.
+router.post('/bootstrap-user', async (req, res) => {
+  try {
+    const bootstrapKey = String(req.header('x-bootstrap-key') || req.body.bootstrap_key || '').trim();
+    if (!process.env.BOOTSTRAP_ADMIN_KEY || !process.env.BOOTSTRAP_ADMIN_KEY.trim()) {
+      return res.status(503).json({ error: 'Bootstrap user provisioning is disabled on this deployment' });
+    }
+
+    if (!bootstrapKey || bootstrapKey !== process.env.BOOTSTRAP_ADMIN_KEY.trim()) {
+      return res.status(403).json({ error: 'Invalid bootstrap key' });
+    }
+
+    const { name, email, password, role = 'system_admin', status = 'active' } = req.body;
+    const normalizedRole = normalizeRole(role);
+    const validationError = validateUserInput({ name, email, role: normalizedRole, status }, { requirePassword: true, password });
+    if (validationError) return res.status(400).json({ error: validationError });
+    if (normalizedRole !== 'system_admin') {
+      return res.status(400).json({ error: 'Bootstrap user must be created as system_admin' });
+    }
+
+    const db = getDb();
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const existing = db.prepare('SELECT id FROM users WHERE email=?').get(normalizedEmail);
+    if (existing) return res.status(409).json({ error: 'Email already in use' });
+
+    const id = uuidv4();
+    const hash = await bcrypt.hash(password, 10);
+    db.prepare('INSERT INTO users (id,name,email,password,role,status,is_active,created_at,updated_at) VALUES (?,?,?,?,?,?,?,datetime(\'now\'),datetime(\'now\'))')
+      .run(id, String(name).trim(), normalizedEmail, hash, normalizedRole, 'active', 1);
+
+    const created = db.prepare('SELECT id,name,email,role,status,is_active,created_at,updated_at FROM users WHERE id=?').get(id);
+    res.status(201).json({
+      message: 'Bootstrap user created successfully',
+      user: userDto(created, getUserProjectIds(db, id)),
+    });
+  } catch (e) {
+    console.error('[auth] bootstrap user failed', e);
+    res.status(500).json({ error: 'Unable to create bootstrap user' });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
