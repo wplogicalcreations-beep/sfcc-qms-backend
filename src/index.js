@@ -10,8 +10,31 @@ const { seed } = require('./db/seed');
 
 const app = express();
 
+function parseAllowedOrigins() {
+  const values = [process.env.FRONTEND_URLS, process.env.FRONTEND_URL]
+    .filter(Boolean)
+    .flatMap((value) => String(value).split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return [...new Set(values)];
+}
+
+const allowedOrigins = parseAllowedOrigins();
+
 app.use(helmet());
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    const isVercelPreview = /^https:\/\/[a-z0-9-]+\.[a-z0-9-]+\.vercel\.app$/i.test(origin) || /^https:\/\/.+\.vercel\.app$/i.test(origin);
+    if (isVercelPreview) return callback(null, true);
+
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
